@@ -1,11 +1,11 @@
 #include "EspMQTTClient.h"
 #include <ArduinoJson.h>
+#include "ConnectData.h"
 
 #define DATA_INTERVAL 1000       // Intervalo para adquirir novos dados do sensor (milisegundos).
                                  // Os dados serão publidados depois de serem adquiridos valores equivalentes a janela do filtro
 #define AVAILABLE_INTERVAL 5000  // Intervalo para enviar sinais de available (milisegundos)
-#define LED_INTERVAL_WIFI 1000       // Intervalo para piscar o LED quando conectado na wifi
-#define LED_INTERVAL_MQTT 100        // Intervalo para piscar o LED quando conectado no broker
+#define LED_INTERVAL_MQTT 1000        // Intervalo para piscar o LED quando conectado no broker
 #define JANELA_FILTRO 10         // Número de amostras do filtro para realizar a média
 
 byte TRIG_PIN = 14;
@@ -15,18 +15,6 @@ byte ECHO_PIN = 13;
 unsigned long dataIntevalPrevTime = 0;      // will store last time data was send
 unsigned long availableIntevalPrevTime = 0; // will store last time "available" was send
 
-const String topic_name = "/medidor_nivel";
-
-
-EspMQTTClient client(
-  "SSID",
-  "WIFI_PASSWORD",
-  "IP_BROKER_ADDRES",  // MQTT Broker server ip
-  "BROKER_LOGIN",   // Can be omitted if not needed
-  "BROKER_PASSWORD",   // Can be omitted if not needed
-  "TestClient",     // Client name that uniquely identify your device
-  1883              // The MQTT port, default to 1883. this line can be omitted
-);
 
 void setup()
 {
@@ -110,18 +98,17 @@ void blinkLed(){
   unsigned long time_ms = millis();
   bool ledStatus = false;
   
-  if(WiFi.status() == WL_CONNECTED && !client.isConnected()){
-    if( (time_ms-ledWifiPrevTime) >= LED_INTERVAL_WIFI){
-      ledStatus = !digitalRead(LED_BUILTIN);
-      digitalWrite(LED_BUILTIN, ledStatus);
-      ledWifiPrevTime = time_ms;
+  if( (WiFi.status() == WL_CONNECTED)){
+    if(client.isMqttConnected()){
+      if( (time_ms-ledMqttPrevTime) >= LED_INTERVAL_MQTT){
+        ledStatus = !digitalRead(LED_BUILTIN);
+        digitalWrite(LED_BUILTIN, ledStatus);
+        ledMqttPrevTime = time_ms;
+      }      
     }
-  }
-  if(WiFi.status() == WL_CONNECTED && client.isConnected()){
-    if( (time_ms-ledMqttPrevTime) >= LED_INTERVAL_MQTT){
-      ledStatus = !digitalRead(LED_BUILTIN);
-      digitalWrite(LED_BUILTIN, ledStatus);
-    }
+//    else{
+//      digitalWrite(LED_BUILTIN, HIGH);
+//    }
   }
 }
 
