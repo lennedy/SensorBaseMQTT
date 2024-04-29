@@ -1,6 +1,6 @@
 #include "EspMQTTClient.h"
 #include <ArduinoJson.h>
-#include "ConnectData.h"
+#include "ConnectDataCasa.h"
 
 #define DATA_INTERVAL 1000       // Intervalo para adquirir novos dados do sensor (milisegundos).
                                  // Os dados serão publidados depois de serem adquiridos valores equivalentes a janela do filtro
@@ -106,9 +106,12 @@ void blinkLed(){
         ledMqttPrevTime = time_ms;
       }      
     }
-//    else{
-//      digitalWrite(LED_BUILTIN, HIGH);
-//    }
+    else{
+      digitalWrite(LED_BUILTIN, LOW); //liga led
+    }
+  }
+  else{
+    digitalWrite(LED_BUILTIN, HIGH); //desliga led
   }
 }
 
