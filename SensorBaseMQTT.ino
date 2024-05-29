@@ -1,6 +1,6 @@
 #include "EspMQTTClient.h"
 #include <ArduinoJson.h>
-#include "ConnectDataCasa.h"
+#include "ConnectDataCell.h"
 
 #define DATA_INTERVAL 1000       // Intervalo para adquirir novos dados do sensor (milisegundos).
                                  // Os dados serão publidados depois de serem adquiridos valores equivalentes a janela do filtro
@@ -8,8 +8,8 @@
 #define LED_INTERVAL_MQTT 1000        // Intervalo para piscar o LED quando conectado no broker
 #define JANELA_FILTRO 10         // Número de amostras do filtro para realizar a média
 
-byte TRIG_PIN = 14;
-byte ECHO_PIN = 13;
+byte TRIG_PIN = 12;
+byte ECHO_PIN = 14;
 
 
 unsigned long dataIntevalPrevTime = 0;      // will store last time data was send
@@ -45,7 +45,9 @@ void availableSignal(){
   client.publish(topic_name + "/available", "online"); 
 }
 
-float readSensor(){
+StaticJsonDocument<100> readSensor(){
+  StaticJsonDocument<100> jsonDoc;
+  
   const float SOUND_VELOCITY = 0.034;
   const float CM_TO_INCH     = 0.393701;
 
@@ -66,30 +68,69 @@ float readSensor(){
   // Calculate the distance
   distanceCm = duration * SOUND_VELOCITY/2;
 
-  return distanceCm;
+  jsonDoc["value"] = distanceCm;
+  if(distanceCm > 210 || distanceCm == 0){
+    jsonDoc["erro"] = true;
+  }
+  else{
+    jsonDoc["erro"] = false;
+  }
+  
+  return jsonDoc;
 }
 
 void metodoPublisher(){
-  static unsigned int amostras = 0;  //variável para realizar o filtro de média
+  static unsigned int amostrasTotais = 0;  //variável para realizar o filtro de média
+  static unsigned int amostrasValidas = 0; //variável para realizar o filtro de média
   static float acumulador = 0;       //variável para acumular a média
   
-  acumulador += readSensor();
+  StaticJsonDocument<100> jsonSensor;
+  
+  jsonSensor = readSensor();
+
+  //Realização de tratamento de erros
+  if( jsonSensor["erro"] == false ){
+    float temp  = jsonSensor["value"];
+    acumulador += temp; //somente os valores sem erro serão utilizados na média
+    amostrasValidas++;  //incremento das amostras onde não foram encontradas erros
+  }
+  amostrasTotais++;  //incremento de amostras total
 
   //realização de média
-  if (amostras >= JANELA_FILTRO){
+  if (amostrasTotais >= JANELA_FILTRO){
     StaticJsonDocument<300> jsonDoc;
-  
-    jsonDoc["RSSI"] = WiFi.RSSI();
-    jsonDoc["nivel"] = acumulador/JANELA_FILTRO;
+
+    jsonDoc["RSSI"]     = WiFi.RSSI();
+    jsonDoc["nivel"]    = 0;
+    jsonDoc["erro"]     = false;
+    jsonDoc["invalido"] = false;
+
+    //se amostras válidas forem diferentes das amostras totais houve erro em alguma aquisição de dados
+    if(amostrasTotais != amostrasValidas){ 
+      if(amostrasValidas > 0){
+        jsonDoc["nivel"] = acumulador/amostrasValidas;
+      }
+      else{ //Se amostras válidas for igual a 0 o valor será zero e o conjunto de dados inválidos
+        jsonDoc["nivel"] = 0;
+        jsonDoc["invalido"] = true;
+      }
+      
+      jsonDoc["erro"] = true;
+    }
+    else{ //todos os dados são válidos
+      jsonDoc["nivel"] = acumulador/JANELA_FILTRO;
+      jsonDoc["erro"]  = false;
+    }
   
     String payload = "";
     serializeJson(jsonDoc, payload);
 
     client.publish(topic_name, payload); 
-    amostras = 0; 
+    amostrasTotais = 0; 
+    amostrasValidas = 0;
     acumulador = 0;
   }
-  amostras++;  
+    
 }
 
 void blinkLed(){
